@@ -3,6 +3,7 @@ from pypdf import PdfWriter
 from PIL import Image
 import tempfile
 import os
+import base64
 
 st.set_page_config(
     page_title="PDF / Image File Merger",
@@ -32,12 +33,14 @@ files = st.file_uploader(
 
 if files:
 
-    st.subheader("Uploaded Files")
-
-    for file in files:
-        st.write("📄", file.name)
-
     st.success("Files uploaded successfully!")
+
+    if st.button("View Uploaded Files"):
+
+        st.subheader("Uploaded Files")
+
+        for file in files:
+            st.write("📄", file.name)
 
 # --------------------------------------
 # 3. Merge PDF / Image Files
@@ -46,9 +49,11 @@ if files:
 if st.button("Merge PDF / Image Files"):
 
     if not files:
+
         st.warning("Please upload PDF or image files first.")
 
     elif len(files) < 2:
+
         st.warning("Please upload at least 2 files.")
 
     else:
@@ -57,21 +62,28 @@ if st.button("Merge PDF / Image Files"):
 
         for file in files:
 
-            # Save uploaded file temporarily
+            # Create temporary path
             temp_path = os.path.join(
                 tempfile.gettempdir(),
                 file.name
             )
 
+            # Save uploaded file
             with open(temp_path, "wb") as f:
                 f.write(file.getbuffer())
 
-            # PDF file
+            # -------------------------------
+            # PDF File
+            # -------------------------------
+
             if file.name.lower().endswith(".pdf"):
 
                 merger.append(temp_path)
 
-            # Image file
+            # -------------------------------
+            # Image File
+            # -------------------------------
+
             else:
 
                 image = Image.open(temp_path)
@@ -88,28 +100,75 @@ if st.button("Merge PDF / Image Files"):
 
                 merger.append(image_pdf)
 
-        # Create merged PDF
+        # --------------------------------------
+        # Create Merged PDF
+        # --------------------------------------
+
         output_path = os.path.join(
             tempfile.gettempdir(),
             "merged_file.pdf"
         )
 
         with open(output_path, "wb") as output:
+
             merger.write(output)
 
         merger.close()
 
         st.success("Files merged successfully!")
 
-        # --------------------------------------
-        # 4. Download PDF
-        # --------------------------------------
+        # Store path in session state
+        st.session_state["merged_pdf"] = output_path
 
-        with open(output_path, "rb") as pdf_file:
 
-            st.download_button(
-                label="Download Merged PDF",
-                data=pdf_file,
-                file_name="merged_file.pdf",
-                mime="application/pdf"
-            )
+# --------------------------------------
+# 4. View Merged PDF
+# --------------------------------------
+
+if "merged_pdf" in st.session_state:
+
+    if st.button("View Merged PDF"):
+
+        with open(
+            st.session_state["merged_pdf"],
+            "rb"
+        ) as pdf_file:
+
+            pdf_bytes = pdf_file.read()
+
+        base64_pdf = base64.b64encode(
+            pdf_bytes
+        ).decode("utf-8")
+
+        pdf_display = f"""
+        <iframe
+            src="data:application/pdf;base64,{base64_pdf}"
+            width="100%"
+            height="600"
+            type="application/pdf">
+        </iframe>
+        """
+
+        st.markdown(
+            pdf_display,
+            unsafe_allow_html=True
+        )
+
+
+# --------------------------------------
+# 5. Download Merged PDF
+# --------------------------------------
+
+if "merged_pdf" in st.session_state:
+
+    with open(
+        st.session_state["merged_pdf"],
+        "rb"
+    ) as pdf_file:
+
+        st.download_button(
+            label="Download Merged PDF",
+            data=pdf_file,
+            file_name="merged_file.pdf",
+            mime="application/pdf"
+        )
