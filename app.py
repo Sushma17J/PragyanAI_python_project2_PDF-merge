@@ -65,11 +65,8 @@ if uploaded_files:
     current_files = {}
 
     for file in uploaded_files:
-
         file_key = f"{file.name}_{file.size}"
-
         current_files[file_key] = file
-
 
     # Remove files that no longer exist
     st.session_state.file_order = [
@@ -78,14 +75,11 @@ if uploaded_files:
         if key in current_files
     ]
 
-
-    # Add newly uploaded files at the end
+    # Add newly uploaded files
     for key in current_files:
 
         if key not in st.session_state.file_order:
-
             st.session_state.file_order.append(key)
-
 
     # Create files in selected order
     ordered_files = [
@@ -93,11 +87,9 @@ if uploaded_files:
         for key in st.session_state.file_order
     ]
 
-
     st.success(
         f"✅ {len(ordered_files)} file(s) uploaded successfully!"
     )
-
 
 else:
 
@@ -112,17 +104,24 @@ else:
 
 if uploaded_files:
 
+    st.subheader("2. Remove Files")
+
     if st.button(
         "🗑️ Remove All Files",
-        type="secondary"
+        type="secondary",
+        use_container_width=True
     ):
 
+        # Clear uploaded files
         st.session_state.file_order = []
 
+        # Clear merged PDF
         st.session_state.merged_pdf = None
 
+        # Change uploader key
         st.session_state.uploader_key += 1
 
+        # Refresh the application
         st.rerun()
 
 
@@ -132,28 +131,21 @@ if uploaded_files:
 
 if ordered_files:
 
-    st.subheader("2. Arrange File Order")
+    st.subheader("3. Arrange File Order")
 
     st.write(
         "The PDF will be created in the order shown below."
     )
-
-
-    # ----------------------------------------------
-    # SELECT FILE
-    # ----------------------------------------------
 
     file_names = [
         file.name
         for file in ordered_files
     ]
 
-
     selected_file_name = st.selectbox(
         "Select a file to move",
         file_names
     )
-
 
     selected_index = file_names.index(
         selected_file_name
@@ -166,7 +158,6 @@ if ordered_files:
 
     col1, col2 = st.columns(2)
 
-
     with col1:
 
         if st.button(
@@ -176,11 +167,14 @@ if ordered_files:
 
             if selected_index > 0:
 
-                st.session_state.file_order[
-                    selected_index
-                ], st.session_state.file_order[
-                    selected_index - 1
-                ] = (
+                (
+                    st.session_state.file_order[
+                        selected_index
+                    ],
+                    st.session_state.file_order[
+                        selected_index - 1
+                    ]
+                ) = (
                     st.session_state.file_order[
                         selected_index - 1
                     ],
@@ -203,11 +197,14 @@ if ordered_files:
                 st.session_state.file_order
             ) - 1:
 
-                st.session_state.file_order[
-                    selected_index
-                ], st.session_state.file_order[
-                    selected_index + 1
-                ] = (
+                (
+                    st.session_state.file_order[
+                        selected_index
+                    ],
+                    st.session_state.file_order[
+                        selected_index + 1
+                    ]
+                ) = (
                     st.session_state.file_order[
                         selected_index + 1
                     ],
@@ -225,7 +222,6 @@ if ordered_files:
 
     st.write("### 📋 Current File Order")
 
-
     for number, file in enumerate(
         ordered_files,
         start=1
@@ -242,8 +238,7 @@ if ordered_files:
 
 if ordered_files:
 
-    st.subheader("3. View Uploaded Files")
-
+    st.subheader("4. View Uploaded Files")
 
     if st.button(
         "👁️ View Files",
@@ -283,18 +278,14 @@ if ordered_files:
             # PDF
             # --------------------------------------
 
-            elif file.name.lower().endswith(
-                ".pdf"
-            ):
+            elif file.name.lower().endswith(".pdf"):
 
                 pdf_bytes = file.getvalue()
-
 
                 pdf_document = fitz.open(
                     stream=pdf_bytes,
                     filetype="pdf"
                 )
-
 
                 for page_number in range(
                     len(pdf_document)
@@ -304,7 +295,6 @@ if ordered_files:
                         page_number
                     ]
 
-
                     pix = page.get_pixmap(
                         matrix=fitz.Matrix(
                             1.5,
@@ -312,11 +302,9 @@ if ordered_files:
                         )
                     )
 
-
                     image_bytes = pix.tobytes(
                         "png"
                     )
-
 
                     st.image(
                         image_bytes,
@@ -327,7 +315,6 @@ if ordered_files:
                         use_container_width=True
                     )
 
-
                 pdf_document.close()
 
 
@@ -337,8 +324,7 @@ if ordered_files:
 
 if ordered_files:
 
-    st.subheader("4. Merge PDF / Image Files")
-
+    st.subheader("5. Merge PDF / Image Files")
 
     if st.button(
         "🔄 Merge PDF / Image Files",
@@ -353,7 +339,6 @@ if ordered_files:
                 delete=False,
                 suffix=".pdf"
             ).name
-
 
             pdf_writer = PdfWriter()
 
@@ -375,9 +360,7 @@ if ordered_files:
 
                     reader = PdfReader(file)
 
-
                     for page in reader.pages:
-
                         pdf_writer.add_page(page)
 
 
@@ -393,28 +376,21 @@ if ordered_files:
                         file
                     ).convert("RGB")
 
-
-                    image_path = (
-                        tempfile.NamedTemporaryFile(
-                            delete=False,
-                            suffix=".pdf"
-                        ).name
-                    )
-
+                    image_path = tempfile.NamedTemporaryFile(
+                        delete=False,
+                        suffix=".pdf"
+                    ).name
 
                     image.save(
                         image_path,
                         "PDF"
                     )
 
-
                     reader = PdfReader(
                         image_path
                     )
 
-
                     for page in reader.pages:
-
                         pdf_writer.add_page(page)
 
 
@@ -431,12 +407,9 @@ if ordered_files:
                     output_file
                 )
 
-
-            # Save merged PDF
             st.session_state.merged_pdf = (
                 output_path
             )
-
 
             st.success(
                 "✅ Files merged successfully!"
@@ -456,12 +429,9 @@ if ordered_files:
 
 if st.session_state.merged_pdf:
 
-    st.subheader("5. Merged PDF")
+    st.subheader("6. Merged PDF")
 
-
-    merged_pdf = (
-        st.session_state.merged_pdf
-    )
+    merged_pdf = st.session_state.merged_pdf
 
 
     # ----------------------------------------------
@@ -480,12 +450,10 @@ if st.session_state.merged_pdf:
 
             pdf_bytes = pdf_file.read()
 
-
         pdf_document = fitz.open(
             stream=pdf_bytes,
             filetype="pdf"
         )
-
 
         st.success(
             f"✅ Merged PDF contains "
@@ -503,7 +471,6 @@ if st.session_state.merged_pdf:
                 page_number
             ]
 
-
             pix = page.get_pixmap(
                 matrix=fitz.Matrix(
                     1.5,
@@ -511,11 +478,9 @@ if st.session_state.merged_pdf:
                 )
             )
 
-
             image_bytes = pix.tobytes(
                 "png"
             )
-
 
             st.image(
                 image_bytes,
@@ -525,7 +490,6 @@ if st.session_state.merged_pdf:
                 ),
                 use_container_width=True
             )
-
 
         pdf_document.close()
 
