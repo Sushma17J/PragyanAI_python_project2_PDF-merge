@@ -1,174 +1,347 @@
 import streamlit as st
-from pypdf import PdfWriter
+from pypdf import PdfWriter, PdfReader
 from PIL import Image
 import tempfile
-import os
-import base64
+import fitz
+
+
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="PDF / Image File Merger",
-    page_icon="📄"
+    page_icon="📄",
+    layout="centered"
 )
+
+
+# --------------------------------------------------
+# TITLE
+# --------------------------------------------------
 
 st.title("📄 PDF / Image File Merger")
 
 st.write(
-    "Upload multiple PDF or image files and merge them "
-    "into a single PDF file."
+    "Upload PDF or image files, view them, "
+    "merge them into one PDF, and download the result."
 )
 
-# --------------------------------------
-# 1. Upload PDF / Image Files
-# --------------------------------------
 
-files = st.file_uploader(
-    "Upload PDF / Image Files",
-    type=["pdf", "png", "jpg", "jpeg"],
+# --------------------------------------------------
+# UPLOAD FILES
+# --------------------------------------------------
+
+st.subheader("1. Upload PDF / Image Files")
+
+uploaded_files = st.file_uploader(
+    "Choose PDF or Image files",
+    type=["pdf", "jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 
-# --------------------------------------
-# 2. Display Uploaded Files
-# --------------------------------------
 
-if files:
+# --------------------------------------------------
+# UPLOAD STATUS
+# --------------------------------------------------
 
-    st.success("Files uploaded successfully!")
+if uploaded_files:
 
-    if st.button("View Uploaded Files"):
+    st.success("✅ Files uploaded successfully!")
 
-        st.subheader("Uploaded Files")
+else:
 
-        for file in files:
-            st.write("📄", file.name)
+    st.info("📂 Please upload PDF or image files.")
 
-# --------------------------------------
-# 3. Merge PDF / Image Files
-# --------------------------------------
 
-if st.button("Merge PDF / Image Files"):
+# --------------------------------------------------
+# REMOVE FILES
+# --------------------------------------------------
 
-    if not files:
+if uploaded_files:
 
-        st.warning("Please upload PDF or image files first.")
+    if st.button("🗑️ Remove Files"):
 
-    elif len(files) < 2:
+        st.session_state.clear()
 
-        st.warning("Please upload at least 2 files.")
+        st.rerun()
 
-    else:
 
-        merger = PdfWriter()
+# --------------------------------------------------
+# VIEW UPLOADED FILES
+# --------------------------------------------------
 
-        for file in files:
+if uploaded_files:
 
-            # Create temporary path
-            temp_path = os.path.join(
-                tempfile.gettempdir(),
-                file.name
-            )
+    st.subheader("2. View Uploaded Files")
 
-            # Save uploaded file
-            with open(temp_path, "wb") as f:
-                f.write(file.getbuffer())
+    if st.button("👁️ View Files"):
 
-            # -------------------------------
-            # PDF File
-            # -------------------------------
+        for file in uploaded_files:
 
-            if file.name.lower().endswith(".pdf"):
+            st.write("---")
 
-                merger.append(temp_path)
+            st.write(f"📄 **{file.name}**")
 
-            # -------------------------------
-            # Image File
-            # -------------------------------
 
-            else:
+            # --------------------------------------
+            # IMAGE FILE
+            # --------------------------------------
 
-                image = Image.open(temp_path)
+            if file.name.lower().endswith(
+                (".jpg", ".jpeg", ".png")
+            ):
 
-                if image.mode != "RGB":
-                    image = image.convert("RGB")
+                image = Image.open(file)
 
-                image_pdf = os.path.join(
-                    tempfile.gettempdir(),
-                    "temp_image.pdf"
+                st.image(
+                    image,
+                    caption=file.name,
+                    use_container_width=True
                 )
 
-                image.save(image_pdf)
 
-                merger.append(image_pdf)
+            # --------------------------------------
+            # PDF FILE
+            # --------------------------------------
 
-        # --------------------------------------
-        # Create Merged PDF
-        # --------------------------------------
+            elif file.name.lower().endswith(".pdf"):
 
-        output_path = os.path.join(
-            tempfile.gettempdir(),
-            "merged_file.pdf"
-        )
+                pdf_bytes = file.getvalue()
 
-        with open(output_path, "wb") as output:
-
-            merger.write(output)
-
-        merger.close()
-
-        st.success("Files merged successfully!")
-
-        # Store path in session state
-        st.session_state["merged_pdf"] = output_path
+                pdf_document = fitz.open(
+                    stream=pdf_bytes,
+                    filetype="pdf"
+                )
 
 
-# --------------------------------------
-# 4. View Merged PDF
-# --------------------------------------
+                for page_number in range(
+                    len(pdf_document)
+                ):
+
+                    page = pdf_document[
+                        page_number
+                    ]
+
+                    pix = page.get_pixmap(
+                        matrix=fitz.Matrix(1.5, 1.5)
+                    )
+
+                    image_bytes = pix.tobytes(
+                        "png"
+                    )
+
+                    st.image(
+                        image_bytes,
+                        caption=f"{file.name} - Page {page_number + 1}",
+                        use_container_width=True
+                    )
+
+
+                pdf_document.close()
+
+
+# --------------------------------------------------
+# MERGE FILES
+# --------------------------------------------------
+
+st.subheader("3. Merge PDF / Image Files")
+
+
+if uploaded_files:
+
+    if st.button(
+        "🔄 Merge PDF / Image Files",
+        type="primary"
+    ):
+
+        try:
+
+            # Create output PDF
+
+            output_path = tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".pdf"
+            ).name
+
+
+            pdf_writer = PdfWriter()
+
+
+            # --------------------------------------
+            # PROCESS EVERY FILE
+            # --------------------------------------
+
+            for uploaded_file in uploaded_files:
+
+                file_name = uploaded_file.name.lower()
+
+
+                # ----------------------------------
+                # PDF
+                # ----------------------------------
+
+                if file_name.endswith(".pdf"):
+
+                    reader = PdfReader(
+                        uploaded_file
+                    )
+
+                    for page in reader.pages:
+
+                        pdf_writer.add_page(page)
+
+
+                # ----------------------------------
+                # IMAGE
+                # ----------------------------------
+
+                elif file_name.endswith(
+                    (".jpg", ".jpeg", ".png")
+                ):
+
+                    image = Image.open(
+                        uploaded_file
+                    ).convert("RGB")
+
+
+                    image_path = tempfile.NamedTemporaryFile(
+                        delete=False,
+                        suffix=".pdf"
+                    ).name
+
+
+                    image.save(
+                        image_path,
+                        "PDF"
+                    )
+
+
+                    reader = PdfReader(
+                        image_path
+                    )
+
+
+                    for page in reader.pages:
+
+                        pdf_writer.add_page(page)
+
+
+            # --------------------------------------
+            # SAVE MERGED PDF
+            # --------------------------------------
+
+            with open(
+                output_path,
+                "wb"
+            ) as output_file:
+
+                pdf_writer.write(
+                    output_file
+                )
+
+
+            # Save path in session
+
+            st.session_state[
+                "merged_pdf"
+            ] = output_path
+
+
+            st.success(
+                "✅ Files merged successfully!"
+            )
+
+
+        except Exception as e:
+
+            st.error(
+                f"❌ Error: {str(e)}"
+            )
+
+
+# --------------------------------------------------
+# MERGED PDF SECTION
+# --------------------------------------------------
 
 if "merged_pdf" in st.session_state:
 
-    if st.button("View Merged PDF"):
+    st.subheader("4. Merged PDF")
+
+
+    merged_pdf = st.session_state[
+        "merged_pdf"
+    ]
+
+
+    # ----------------------------------------------
+    # VIEW MERGED PDF
+    # ----------------------------------------------
+
+    if st.button("👁️ View Merged PDF"):
 
         with open(
-            st.session_state["merged_pdf"],
+            merged_pdf,
             "rb"
         ) as pdf_file:
 
             pdf_bytes = pdf_file.read()
 
-        base64_pdf = base64.b64encode(
-            pdf_bytes
-        ).decode("utf-8")
 
-        pdf_display = f"""
-        <iframe
-            src="data:application/pdf;base64,{base64_pdf}"
-            width="100%"
-            height="600"
-            type="application/pdf">
-        </iframe>
-        """
-
-        st.markdown(
-            pdf_display,
-            unsafe_allow_html=True
+        pdf_document = fitz.open(
+            stream=pdf_bytes,
+            filetype="pdf"
         )
 
 
-# --------------------------------------
-# 5. Download Merged PDF
-# --------------------------------------
+        st.success(
+            f"✅ Merged PDF contains {len(pdf_document)} page(s)."
+        )
 
-if "merged_pdf" in st.session_state:
+
+        # Display every page
+
+        for page_number in range(
+            len(pdf_document)
+        ):
+
+            page = pdf_document[
+                page_number
+            ]
+
+
+            pix = page.get_pixmap(
+                matrix=fitz.Matrix(1.5, 1.5)
+            )
+
+
+            image_bytes = pix.tobytes(
+                "png"
+            )
+
+
+            st.image(
+                image_bytes,
+                caption=f"Merged PDF - Page {page_number + 1}",
+                use_container_width=True
+            )
+
+
+        pdf_document.close()
+
+
+    # ----------------------------------------------
+    # DOWNLOAD MERGED PDF
+    # ----------------------------------------------
 
     with open(
-        st.session_state["merged_pdf"],
+        merged_pdf,
         "rb"
     ) as pdf_file:
 
         st.download_button(
-            label="Download Merged PDF",
+            label="⬇️ Download Merged PDF",
             data=pdf_file,
-            file_name="merged_file.pdf",
+            file_name="merged_files.pdf",
             mime="application/pdf"
         )
