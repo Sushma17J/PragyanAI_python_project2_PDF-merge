@@ -5,9 +5,9 @@ import tempfile
 import fitz
 
 
-# --------------------------------------------------
+# ==================================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==================================================
 
 st.set_page_config(
     page_title="PDF / Image File Merger",
@@ -16,76 +16,254 @@ st.set_page_config(
 )
 
 
-# --------------------------------------------------
+# ==================================================
+# SESSION STATE
+# ==================================================
+
+if "file_order" not in st.session_state:
+    st.session_state.file_order = []
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
+if "merged_pdf" not in st.session_state:
+    st.session_state.merged_pdf = None
+
+
+# ==================================================
 # TITLE
-# --------------------------------------------------
+# ==================================================
 
 st.title("📄 PDF / Image File Merger")
 
 st.write(
-    "Upload PDF or image files, view them, "
-    "merge them into one PDF, and download the result."
+    "Upload PDF or image files, arrange their order, "
+    "view them, merge them, and download the final PDF."
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # UPLOAD FILES
-# --------------------------------------------------
+# ==================================================
 
 st.subheader("1. Upload PDF / Image Files")
 
 uploaded_files = st.file_uploader(
     "Choose PDF or Image files",
     type=["pdf", "jpg", "jpeg", "png"],
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state.uploader_key}"
 )
 
 
-# --------------------------------------------------
-# UPLOAD STATUS
-# --------------------------------------------------
+# ==================================================
+# CREATE FILE DICTIONARY
+# ==================================================
 
 if uploaded_files:
 
-    st.success("✅ Files uploaded successfully!")
+    current_files = {}
+
+    for file in uploaded_files:
+
+        file_key = f"{file.name}_{file.size}"
+
+        current_files[file_key] = file
+
+
+    # Remove files that no longer exist
+    st.session_state.file_order = [
+        key
+        for key in st.session_state.file_order
+        if key in current_files
+    ]
+
+
+    # Add newly uploaded files at the end
+    for key in current_files:
+
+        if key not in st.session_state.file_order:
+
+            st.session_state.file_order.append(key)
+
+
+    # Create files in selected order
+    ordered_files = [
+        current_files[key]
+        for key in st.session_state.file_order
+    ]
+
+
+    st.success(
+        f"✅ {len(ordered_files)} file(s) uploaded successfully!"
+    )
+
 
 else:
+
+    ordered_files = []
 
     st.info("📂 Please upload PDF or image files.")
 
 
-# --------------------------------------------------
+# ==================================================
 # REMOVE FILES
-# --------------------------------------------------
+# ==================================================
 
 if uploaded_files:
 
-    if st.button("🗑️ Remove Files"):
+    if st.button(
+        "🗑️ Remove All Files",
+        type="secondary"
+    ):
 
-        st.session_state.clear()
+        st.session_state.file_order = []
+
+        st.session_state.merged_pdf = None
+
+        st.session_state.uploader_key += 1
 
         st.rerun()
 
 
-# --------------------------------------------------
-# VIEW UPLOADED FILES
-# --------------------------------------------------
+# ==================================================
+# FILE ORDER SECTION
+# ==================================================
 
-if uploaded_files:
+if ordered_files:
 
-    st.subheader("2. View Uploaded Files")
+    st.subheader("2. Arrange File Order")
 
-    if st.button("👁️ View Files"):
+    st.write(
+        "The PDF will be created in the order shown below."
+    )
 
-        for file in uploaded_files:
+
+    # ----------------------------------------------
+    # SELECT FILE
+    # ----------------------------------------------
+
+    file_names = [
+        file.name
+        for file in ordered_files
+    ]
+
+
+    selected_file_name = st.selectbox(
+        "Select a file to move",
+        file_names
+    )
+
+
+    selected_index = file_names.index(
+        selected_file_name
+    )
+
+
+    # ----------------------------------------------
+    # UP / DOWN BUTTONS
+    # ----------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        if st.button(
+            "⬆️ Move Up",
+            use_container_width=True
+        ):
+
+            if selected_index > 0:
+
+                st.session_state.file_order[
+                    selected_index
+                ], st.session_state.file_order[
+                    selected_index - 1
+                ] = (
+                    st.session_state.file_order[
+                        selected_index - 1
+                    ],
+                    st.session_state.file_order[
+                        selected_index
+                    ]
+                )
+
+                st.rerun()
+
+
+    with col2:
+
+        if st.button(
+            "⬇️ Move Down",
+            use_container_width=True
+        ):
+
+            if selected_index < len(
+                st.session_state.file_order
+            ) - 1:
+
+                st.session_state.file_order[
+                    selected_index
+                ], st.session_state.file_order[
+                    selected_index + 1
+                ] = (
+                    st.session_state.file_order[
+                        selected_index + 1
+                    ],
+                    st.session_state.file_order[
+                        selected_index
+                    ]
+                )
+
+                st.rerun()
+
+
+    # ----------------------------------------------
+    # SHOW CURRENT ORDER
+    # ----------------------------------------------
+
+    st.write("### 📋 Current File Order")
+
+
+    for number, file in enumerate(
+        ordered_files,
+        start=1
+    ):
+
+        st.write(
+            f"**{number}.** 📄 {file.name}"
+        )
+
+
+# ==================================================
+# VIEW FILES
+# ==================================================
+
+if ordered_files:
+
+    st.subheader("3. View Uploaded Files")
+
+
+    if st.button(
+        "👁️ View Files",
+        use_container_width=True
+    ):
+
+        for number, file in enumerate(
+            ordered_files,
+            start=1
+        ):
 
             st.write("---")
 
-            st.write(f"📄 **{file.name}**")
+            st.write(
+                f"### {number}. 📄 {file.name}"
+            )
 
 
             # --------------------------------------
-            # IMAGE FILE
+            # IMAGE
             # --------------------------------------
 
             if file.name.lower().endswith(
@@ -102,12 +280,15 @@ if uploaded_files:
 
 
             # --------------------------------------
-            # PDF FILE
+            # PDF
             # --------------------------------------
 
-            elif file.name.lower().endswith(".pdf"):
+            elif file.name.lower().endswith(
+                ".pdf"
+            ):
 
                 pdf_bytes = file.getvalue()
+
 
                 pdf_document = fitz.open(
                     stream=pdf_bytes,
@@ -123,17 +304,26 @@ if uploaded_files:
                         page_number
                     ]
 
+
                     pix = page.get_pixmap(
-                        matrix=fitz.Matrix(1.5, 1.5)
+                        matrix=fitz.Matrix(
+                            1.5,
+                            1.5
+                        )
                     )
+
 
                     image_bytes = pix.tobytes(
                         "png"
                     )
 
+
                     st.image(
                         image_bytes,
-                        caption=f"{file.name} - Page {page_number + 1}",
+                        caption=(
+                            f"{file.name} - "
+                            f"Page {page_number + 1}"
+                        ),
                         use_container_width=True
                     )
 
@@ -141,24 +331,24 @@ if uploaded_files:
                 pdf_document.close()
 
 
-# --------------------------------------------------
+# ==================================================
 # MERGE FILES
-# --------------------------------------------------
+# ==================================================
 
-st.subheader("3. Merge PDF / Image Files")
+if ordered_files:
 
+    st.subheader("4. Merge PDF / Image Files")
 
-if uploaded_files:
 
     if st.button(
         "🔄 Merge PDF / Image Files",
-        type="primary"
+        type="primary",
+        use_container_width=True
     ):
 
         try:
 
             # Create output PDF
-
             output_path = tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix=".pdf"
@@ -169,23 +359,22 @@ if uploaded_files:
 
 
             # --------------------------------------
-            # PROCESS EVERY FILE
+            # PROCESS FILES IN SELECTED ORDER
             # --------------------------------------
 
-            for uploaded_file in uploaded_files:
+            for file in ordered_files:
 
-                file_name = uploaded_file.name.lower()
+                file_name = file.name.lower()
 
 
                 # ----------------------------------
-                # PDF
+                # PDF FILE
                 # ----------------------------------
 
                 if file_name.endswith(".pdf"):
 
-                    reader = PdfReader(
-                        uploaded_file
-                    )
+                    reader = PdfReader(file)
+
 
                     for page in reader.pages:
 
@@ -193,7 +382,7 @@ if uploaded_files:
 
 
                 # ----------------------------------
-                # IMAGE
+                # IMAGE FILE
                 # ----------------------------------
 
                 elif file_name.endswith(
@@ -201,14 +390,16 @@ if uploaded_files:
                 ):
 
                     image = Image.open(
-                        uploaded_file
+                        file
                     ).convert("RGB")
 
 
-                    image_path = tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=".pdf"
-                    ).name
+                    image_path = (
+                        tempfile.NamedTemporaryFile(
+                            delete=False,
+                            suffix=".pdf"
+                        ).name
+                    )
 
 
                     image.save(
@@ -241,11 +432,10 @@ if uploaded_files:
                 )
 
 
-            # Save path in session
-
-            st.session_state[
-                "merged_pdf"
-            ] = output_path
+            # Save merged PDF
+            st.session_state.merged_pdf = (
+                output_path
+            )
 
 
             st.success(
@@ -260,25 +450,28 @@ if uploaded_files:
             )
 
 
-# --------------------------------------------------
-# MERGED PDF SECTION
-# --------------------------------------------------
+# ==================================================
+# MERGED PDF
+# ==================================================
 
-if "merged_pdf" in st.session_state:
+if st.session_state.merged_pdf:
 
-    st.subheader("4. Merged PDF")
+    st.subheader("5. Merged PDF")
 
 
-    merged_pdf = st.session_state[
-        "merged_pdf"
-    ]
+    merged_pdf = (
+        st.session_state.merged_pdf
+    )
 
 
     # ----------------------------------------------
     # VIEW MERGED PDF
     # ----------------------------------------------
 
-    if st.button("👁️ View Merged PDF"):
+    if st.button(
+        "👁️ View Merged PDF",
+        use_container_width=True
+    ):
 
         with open(
             merged_pdf,
@@ -295,11 +488,12 @@ if "merged_pdf" in st.session_state:
 
 
         st.success(
-            f"✅ Merged PDF contains {len(pdf_document)} page(s)."
+            f"✅ Merged PDF contains "
+            f"{len(pdf_document)} page(s)."
         )
 
 
-        # Display every page
+        # Show every page
 
         for page_number in range(
             len(pdf_document)
@@ -311,7 +505,10 @@ if "merged_pdf" in st.session_state:
 
 
             pix = page.get_pixmap(
-                matrix=fitz.Matrix(1.5, 1.5)
+                matrix=fitz.Matrix(
+                    1.5,
+                    1.5
+                )
             )
 
 
@@ -322,7 +519,10 @@ if "merged_pdf" in st.session_state:
 
             st.image(
                 image_bytes,
-                caption=f"Merged PDF - Page {page_number + 1}",
+                caption=(
+                    f"Merged PDF - "
+                    f"Page {page_number + 1}"
+                ),
                 use_container_width=True
             )
 
@@ -331,7 +531,7 @@ if "merged_pdf" in st.session_state:
 
 
     # ----------------------------------------------
-    # DOWNLOAD MERGED PDF
+    # DOWNLOAD
     # ----------------------------------------------
 
     with open(
@@ -343,5 +543,6 @@ if "merged_pdf" in st.session_state:
             label="⬇️ Download Merged PDF",
             data=pdf_file,
             file_name="merged_files.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            use_container_width=True
         )
